@@ -30,6 +30,7 @@ export default function Home() {
       a.remove();
     } else {
       alert('Erro ao converter o arquivo.');
+      console.error('Erro ao converter o arquivo:', res.statusText);
     }
 
     setLoading(false);
