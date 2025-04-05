@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
@@ -7,8 +10,12 @@ const { exec } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const uploadDir = process.env.UPLOAD_DIR || 'uploads';
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
 
-app.use(cors());
+app.use(cors({
+  origin: allowedOrigins,
+}));
 
 // Salva em memoria
 const storage = multer.memoryStorage();
