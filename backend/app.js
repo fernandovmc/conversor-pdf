@@ -23,6 +23,11 @@ app.use(cors({
   origin: allowedOrigins,
 }));
 
+// Define a rota GET para a raiz
+app.get('/', (req, res) => {
+    res.send('API do Conversor PDF está funcionando. Use o endpoint POST /upload para enviar arquivos.');
+});
+
 // Salva em memória
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
