@@ -20,7 +20,7 @@ if (!fs.existsSync(uploadDir)) {
 const allowedOrigins = ['https://conversorpdf.com.br', 'https://www.conversorpdf.com.br'];
 
 app.use(cors({
-  origin: allowedOrigins,
+  origin: true,
 }));
 
 // Define a rota GET para a raiz
