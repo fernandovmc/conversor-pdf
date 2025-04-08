@@ -6,11 +6,16 @@ const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 
 const app = express();
 const PORT = 3000;
-const uploadDir = 'uploads';
+const uploadDir = path.join(__dirname, 'uploads');
+
+// Garantir que o diretório 'uploads' exista
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir);
+}
 
 const allowedOrigins = ['https://conversorpdf.com.br', 'https://www.conversorpdf.com.br'];
 
@@ -18,20 +23,31 @@ app.use(cors({
   origin: allowedOrigins,
 }));
 
-// Salva em memoria
+// Salva em memória
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 app.post('/upload', upload.single('file'), (req, res) => {
-    // Cria caminho temporario
-    const tempInputPath = path.join(__dirname, 'uploads', `${Date.now()}${path.extname(req.file.originalname)}`);
+    // Verificar se um arquivo foi enviado
+    if (!req.file) {
+        return res.status(400).json({ error: 'Nenhum arquivo foi enviado.' });
+    }
+
+    // Verificar a extensão do arquivo
+    const fileExtension = path.extname(req.file.originalname).toLowerCase();
+    if (fileExtension !== '.docx') {
+        return res.status(400).json({ error: 'Apenas arquivos .docx são suportados.' });
+    }
+
+    // Criar caminho temporário
+    const tempInputPath = path.join(uploadDir, `${Date.now()}${fileExtension}`);
     const tempOutputPath = tempInputPath.replace('.docx', '.pdf');
 
-    // Salvar no temporario
+    // Salvar no temporário
     fs.writeFileSync(tempInputPath, req.file.buffer);
 
     // Converter arquivo pelo LibreOffice
-    exec(`libreoffice --headless --convert-to pdf "${tempInputPath}" --outdir uploads`, (error) => {
+    execFile('libreoffice', ['--headless', '--convert-to', 'pdf', tempInputPath, '--outdir', uploadDir], (error) => {
         if (error) {
             // Excluir o arquivo temporário em caso de erro
             fs.unlinkSync(tempInputPath);
@@ -39,17 +55,18 @@ app.post('/upload', upload.single('file'), (req, res) => {
         }
 
         const pdfFile = path.basename(tempOutputPath);
-        const pdfFilePath = path.join(__dirname, 'uploads', pdfFile);
+        const pdfFilePath = path.join(uploadDir, pdfFile);
 
         // Enviar o arquivo PDF gerado como download
         res.download(pdfFilePath, (err) => {
-            // Excluir arquivos temporarios
+            // Excluir arquivos temporários
             fs.unlinkSync(tempInputPath);
             if (fs.existsSync(pdfFilePath)) {
                 fs.unlinkSync(pdfFilePath);
             }
             if (err) {
                 console.error('Erro ao enviar o arquivo:', err);
+                return res.status(500).json({ error: 'Erro ao enviar o arquivo.' });
             }
         });
     });
