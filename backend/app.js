@@ -9,7 +9,7 @@ const fs = require('fs');
 const { exec } = require('child_process');
 
 const app = express();
-const PORT = 3001;
+const PORT = 3000;
 const uploadDir = 'uploads';
 
 const allowedOrigins = ['https://conversorpdf.com.br', 'https://www.conversorpdf.com.br'];
