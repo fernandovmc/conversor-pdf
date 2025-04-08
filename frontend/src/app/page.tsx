@@ -14,7 +14,7 @@ export default function Home() {
     formData.append('file', file);
     setLoading(true);
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    const apiUrl = 'https://api.conversorpdf.com.br';
 
     console.log(`API URL: ${apiUrl}`);
 
