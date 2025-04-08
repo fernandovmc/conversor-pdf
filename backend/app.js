@@ -9,9 +9,10 @@ const fs = require('fs');
 const { exec } = require('child_process');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
-const uploadDir = process.env.UPLOAD_DIR || 'uploads';
-const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+const PORT = 3001;
+const uploadDir = 'uploads';
+
+const allowedOrigins = ['https://conversorpdf.com.br', 'https://www.conversorpdf.com.br'];
 
 app.use(cors({
   origin: allowedOrigins,
