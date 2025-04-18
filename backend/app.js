@@ -1,80 +1,97 @@
-const dotenv = require('dotenv');
-dotenv.config();
-
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-const { execFile } = require('child_process');
+const axios = require('axios');
+const FormData = require('form-data');
+const dotenv = require('dotenv');
+
+dotenv.config();
 
 const app = express();
 const PORT = 3000;
-const uploadDir = path.join(__dirname, 'uploads');
 
-// Garantir que o diretório 'uploads' exista
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir);
-}
+const upload = multer({ storage: multer.memoryStorage() });
 
-const allowedOrigins = ['https://conversorpdf.com.br', 'https://www.conversorpdf.com.br'];
+const cloudCOnvertApiKey = process.env.CLOUDCONVERT_API_KEY;
 
 app.use(cors({
-  origin: true,
+  origin: true
 }));
 
-// Define a rota GET para a raiz
-app.get('/', (req, res) => {
-    res.send('API do Conversor PDF está funcionando. Use o endpoint POST /upload para enviar arquivos.');
-});
+app.post('/upload', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo foi enviado.' });
 
-// Salva em memória
-const storage = multer.memoryStorage();
-const upload = multer({ storage });
-
-app.post('/upload', upload.single('file'), (req, res) => {
-    // Verificar se um arquivo foi enviado
-    if (!req.file) {
-        return res.status(400).json({ error: 'Nenhum arquivo foi enviado.' });
-    }
-
-    // Verificar a extensão do arquivo
-    const fileExtension = path.extname(req.file.originalname).toLowerCase();
-    if (fileExtension !== '.docx') {
-        return res.status(400).json({ error: 'Apenas arquivos .docx são suportados.' });
-    }
-
-    // Criar caminho temporário
-    const tempInputPath = path.join(uploadDir, `${Date.now()}${fileExtension}`);
-    const tempOutputPath = tempInputPath.replace('.docx', '.pdf');
-
-    // Salvar no temporário
-    fs.writeFileSync(tempInputPath, req.file.buffer);
-
-    // Converter arquivo pelo LibreOffice
-    execFile('libreoffice', ['--headless', '--convert-to', 'pdf', tempInputPath, '--outdir', uploadDir], (error) => {
-        if (error) {
-            // Excluir o arquivo temporário em caso de erro
-            fs.unlinkSync(tempInputPath);
-            return res.status(500).json({ error: 'Erro ao converter arquivo.' });
+  try {
+    const createJobRes = await axios.post('https://api.cloudconvert.com/v2/jobs', {
+      tasks: {
+        'upload-file': {
+          operation: 'import/upload'
+        },
+        'convert-file': {
+          operation: 'convert',
+          input: 'upload-file',
+          input_format: 'docx',
+          output_format: 'pdf'
+        },
+        'export-file': {
+          operation: 'export/url',
+          input: 'convert-file'
         }
-
-        const pdfFile = path.basename(tempOutputPath);
-        const pdfFilePath = path.join(uploadDir, pdfFile);
-
-        // Enviar o arquivo PDF gerado como download
-        res.download(pdfFilePath, (err) => {
-            // Excluir arquivos temporários
-            fs.unlinkSync(tempInputPath);
-            if (fs.existsSync(pdfFilePath)) {
-                fs.unlinkSync(pdfFilePath);
-            }
-            if (err) {
-                console.error('Erro ao enviar o arquivo:', err);
-                return res.status(500).json({ error: 'Erro ao enviar o arquivo.' });
-            }
-        });
+      }
+    }, {
+      headers: {
+        Authorization: `Bearer ${cloudCOnvertApiKey}`,
+        'Content-Type': 'application/json'
+      }
     });
+
+    const uploadTask = createJobRes.data.data.tasks.find(task => task.name === 'upload-file');
+    const uploadUrl = uploadTask.result.form.url;
+    const uploadParams = uploadTask.result.form.parameters;
+
+    const form = new FormData();
+    for (const [key, value] of Object.entries(uploadParams)) {
+      form.append(key, value);
+    }
+    form.append('file', req.file.buffer, req.file.originalname);
+
+    await axios.post(uploadUrl, form, {
+      headers: form.getHeaders()
+    });
+
+    let jobId = createJobRes.data.data.id;
+    let exportTask;
+
+    while (true) {
+      const jobStatus = await axios.get(`https://api.cloudconvert.com/v2/jobs/${jobId}`, {
+        headers: {
+          Authorization: `Bearer ${process.env.CLOUDCONVERT_API_KEY}`
+        }
+      });
+
+      const status = jobStatus.data.data.status;
+      if (status === 'finished') {
+        exportTask = jobStatus.data.data.tasks.find(task => task.name === 'export-file');
+        break;
+      } else if (status === 'error') {
+        return res.status(500).json({ error: 'Erro na conversão do arquivo.' });
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
+    const fileUrl = exportTask.result.files[0].url;
+    const pdfRes = await axios.get(fileUrl, { responseType: 'arraybuffer' });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="documento.pdf"');
+    res.send(pdfRes.data);
+  } catch (err) {
+    console.error('Erro durante a conversão:', err?.response?.data || err.message);
+    res.status(500).json({ error: 'Erro ao converter arquivo.' });
+  }
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
