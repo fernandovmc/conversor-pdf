@@ -27,7 +27,3 @@ A aplicação está hospedada em: [conversorpdf.com.br](https://conversorpdf.com
 3. Faça commit das suas alterações: `git commit -m 'Adiciona minha feature'`.
 4. Envie para o repositório remoto: `git push origin minha-feature`.
 5. Abra um Pull Request.
-
-## Licença
-
-Este projeto está licenciado sob a [MIT License](LICENSE).
